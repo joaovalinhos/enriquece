@@ -1,0 +1,108 @@
+from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
+import asyncio, json
+
+from services.session import get_session, update_session
+from services.enricher import enrich_cnpj
+
+router = APIRouter()
+
+@router.post("/start/{sid}")
+async def start_enrichment(sid: str, lot_index: int = 0):
+    try:
+        s = get_session(sid)
+    except KeyError:
+        raise HTTPException(404, "Sessão não encontrada")
+    if not s.get("lots"):
+        raise HTTPException(400, "Nenhum dado para processar")
+    update_session(sid, status="processing", current_lot=lot_index, paused=False)
+    return {"ok": True, "message": f"Lote {lot_index+1} iniciado"}
+
+@router.get("/stream/{sid}")
+async def stream_enrichment(sid: str, lot_index: int = 0):
+    """Server-Sent Events — progresso em tempo real."""
+    async def generator():
+        try:
+            s = get_session(sid)
+        except KeyError:
+            yield "data: " + json.dumps({"error": "Sessão não encontrada"}) + "\n\n"
+            return
+
+        lot = s["lots"][lot_index] if lot_index < len(s["lots"]) else []
+        total = len(lot)
+        results = list(s.get("results", []))
+        update_session(sid, status="processing")
+
+        for i, item in enumerate(lot):
+            # check pause
+            for _ in range(30):
+                s = get_session(sid)
+                if not s.get("paused"):
+                    break
+                await asyncio.sleep(0.5)
+
+            if get_session(sid).get("status") == "cancelled":
+                yield "data: " + json.dumps({"status": "cancelled"}) + "\n\n"
+                return
+
+            enriched = await enrich_cnpj(item["clean"], item["cnpj"])
+            results.append(enriched)
+            update_session(sid, results=results, processed=len(results))
+
+            pct = round(((i + 1) / total) * 100)
+            payload = {
+                "status": "processing",
+                "processed": i + 1,
+                "total": total,
+                "pct": pct,
+                "current_cnpj": item["cnpj"],
+                "current_company": enriched.get("razao_social",""),
+                "contacts_found": sum(1 for r in results if r.get("email_cad","") not in ("","não encontrado")),
+                "decisors_found": sum(1 for r in results if r.get("decisores")),
+                "phones_found":   sum(1 for r in results if r.get("telefone_cad","") not in ("","não encontrado")),
+                "emails_found":   sum(1 for r in results if r.get("email_cad","") not in ("","não encontrado")
+                                      or r.get("email_comercial","") not in ("","não encontrado")),
+            }
+            yield "data: " + json.dumps(payload) + "\n\n"
+            await asyncio.sleep(0.05)
+
+        update_session(sid, status="done", results=results)
+        # Summary
+        n = len(results)
+        def pct(x): return round(x/n*100) if n else 0
+        yield "data: " + json.dumps({
+            "status": "done",
+            "total": n,
+            "pct_telefone":  pct(sum(1 for r in results if r.get("telefone_cad","") not in ("","não encontrado"))),
+            "pct_email":     pct(sum(1 for r in results if r.get("email_cad","") not in ("","não encontrado") or r.get("email_comercial","") not in ("","não encontrado"))),
+            "pct_site":      pct(sum(1 for r in results if r.get("site","") not in ("","não encontrado"))),
+            "pct_decisor":   pct(sum(1 for r in results if r.get("decisores"))),
+            "pct_alta":      pct(sum(1 for r in results if r.get("score_geral") == "alta")),
+        }) + "\n\n"
+
+    return StreamingResponse(generator(), media_type="text/event-stream",
+                              headers={"Cache-Control":"no-cache","X-Accel-Buffering":"no"})
+
+@router.post("/pause/{sid}")
+def pause(sid: str):
+    try:
+        update_session(sid, paused=True)
+        return {"ok": True}
+    except KeyError:
+        raise HTTPException(404)
+
+@router.post("/resume/{sid}")
+def resume(sid: str):
+    try:
+        update_session(sid, paused=False)
+        return {"ok": True}
+    except KeyError:
+        raise HTTPException(404)
+
+@router.get("/results/{sid}")
+def get_results(sid: str):
+    try:
+        s = get_session(sid)
+        return {"results": s.get("results", []), "status": s.get("status")}
+    except KeyError:
+        raise HTTPException(404)

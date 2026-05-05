@@ -1,0 +1,34 @@
+import uuid
+from typing import Dict, Any
+from datetime import datetime
+
+sessions: Dict[str, Dict[str, Any]] = {}
+
+def new_session() -> str:
+    sid = str(uuid.uuid4())
+    sessions[sid] = {
+        "id": sid,
+        "created_at": datetime.utcnow().isoformat(),
+        "status": "idle",
+        "filename": None,
+        "total": 0,
+        "valid": 0,
+        "duplicates": 0,
+        "invalid": 0,
+        "lots": [],
+        "current_lot": 0,
+        "processed": 0,
+        "results": [],
+        "invalid_rows": [],
+        "progress_pct": 0,
+        "paused": False,
+    }
+    return sid
+
+def get_session(sid: str) -> Dict[str, Any]:
+    if sid not in sessions:
+        raise KeyError(f"Session {sid} not found")
+    return sessions[sid]
+
+def update_session(sid: str, **kwargs):
+    sessions[sid].update(kwargs)
