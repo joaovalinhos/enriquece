@@ -16,12 +16,13 @@ def validate_cnpj(cnpj):
     c = clean_cnpj(cnpj)
     if len(c) != 14 or len(set(c)) == 1:
         return False
-    def calc(c, n):
-        weights = list(range(n, 1, -1)) + list(range(9, 1, -1))
-        s = sum(int(c[i]) * weights[i] for i in range(n - 1))
-        r = 11 - (s % 11)
-        return 0 if r >= 10 else r
-    return calc(c, 13) == int(c[12]) and calc(c, 14) == int(c[13])
+    w1 = [5,4,3,2,9,8,7,6,5,4,3,2]
+    s1 = sum(int(c[i]) * w1[i] for i in range(12))
+    d1 = 0 if (11 - s1 % 11) >= 10 else (11 - s1 % 11)
+    w2 = [6,5,4,3,2,9,8,7,6,5,4,3,2]
+    s2 = sum(int(c[i]) * w2[i] for i in range(13))
+    d2 = 0 if (11 - s2 % 11) >= 10 else (11 - s2 % 11)
+    return int(c[12]) == d1 and int(c[13]) == d2
 
 def format_cnpj(c):
     c = clean_cnpj(c)
