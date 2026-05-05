@@ -1,34 +1,720 @@
-import uuid
-from typing import Dict, Any
-from datetime import datetime
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Enriquece — Enriquecimento B2B por CNPJ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --navy:#0d1b3e;--navy2:#1a2f5e;--blue:#1e4db7;--blue2:#3b6fd4;
+  --accent:#00c896;--accent2:#00a87b;
+  --bg:#f4f6fb;--white:#fff;--g1:#e8ecf4;--g2:#c8d0e0;--g3:#8896b3;
+  --text:#0d1b3e;--muted:#5a6a8a;
+  --warn:#f59e0b;--danger:#ef4444;--success:#00c896;
+  --font:'DM Sans',system-ui,sans-serif;--mono:'DM Mono','Fira Mono',monospace;
+  --radius:12px;--shadow:0 2px 12px rgba(13,27,62,.08);
+}
+body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;}
 
-sessions: Dict[str, Dict[str, Any]] = {}
+/* ── HEADER ────────────────────────────────────────── */
+header{background:var(--navy);padding:0 32px;height:58px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;}
+.logo{display:flex;align-items:center;gap:10px;}
+.logo-icon{width:32px;height:32px;background:var(--accent);border-radius:9px;display:flex;align-items:center;justify-content:center;}
+.logo-icon svg{width:18px;height:18px;fill:none;stroke:var(--navy);stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;}
+.logo-name{font-size:19px;font-weight:600;color:#fff;letter-spacing:-.4px;}
+.logo-tag{font-size:10px;color:rgba(255,255,255,.35);font-weight:300;margin-left:2px;}
+.badge{background:rgba(0,200,150,.15);border:1px solid rgba(0,200,150,.35);color:var(--accent);font-size:10px;font-weight:600;padding:2px 9px;border-radius:20px;letter-spacing:.5px;}
+.nav-steps{display:flex;gap:5px;align-items:center;}
+.step-dot{width:30px;height:5px;border-radius:3px;background:rgba(255,255,255,.12);transition:.3s;cursor:pointer;}
+.step-dot.active{background:var(--accent);width:38px;}
+.step-dot.done{background:rgba(0,200,150,.35);}
+.step-dot:hover{background:rgba(255,255,255,.25);}
+.hdr-right{font-size:11px;color:rgba(255,255,255,.35);}
 
-def new_session() -> str:
-    sid = str(uuid.uuid4())
-    sessions[sid] = {
-        "id": sid,
-        "created_at": datetime.utcnow().isoformat(),
-        "status": "idle",
-        "filename": None,
-        "total": 0,
-        "valid": 0,
-        "duplicates": 0,
-        "invalid": 0,
-        "lots": [],
-        "current_lot": 0,
-        "processed": 0,
-        "results": [],
-        "invalid_rows": [],
-        "progress_pct": 0,
-        "paused": False,
+/* ── LAYOUT ────────────────────────────────────────── */
+main{max-width:780px;margin:0 auto;padding:32px 20px 60px;}
+.screen{display:none;animation:fadeIn .25s ease;}
+.screen.active{display:block;}
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+/* ── TYPOGRAPHY ────────────────────────────────────── */
+.pg-title{font-size:22px;font-weight:600;color:var(--text);letter-spacing:-.4px;margin-bottom:4px;}
+.pg-sub{font-size:13px;color:var(--muted);margin-bottom:24px;}
+
+/* ── BUTTONS ────────────────────────────────────────── */
+.btn{display:inline-flex;align-items:center;gap:7px;padding:11px 24px;border-radius:10px;font-size:14px;font-weight:500;cursor:pointer;border:none;font-family:var(--font);transition:.2s;}
+.btn-primary{background:var(--navy);color:#fff;}
+.btn-primary:hover{background:var(--navy2);transform:translateY(-1px);}
+.btn-primary:disabled{opacity:.45;cursor:not-allowed;transform:none;}
+.btn-secondary{background:var(--white);color:var(--text);border:1px solid var(--g2);}
+.btn-secondary:hover{background:var(--g1);}
+.btn-danger{background:rgba(239,68,68,.07);color:var(--danger);border:1px solid rgba(239,68,68,.25);}
+.btn-success{background:var(--accent);color:var(--navy);font-weight:600;}
+.btn-success:hover{background:var(--accent2);}
+.btn svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+.btn-link{background:none;border:none;color:var(--blue);font-size:12px;font-weight:500;cursor:pointer;font-family:var(--font);display:inline-flex;align-items:center;gap:4px;padding:0;}
+.btn-link:hover{text-decoration:underline;}
+.actions{display:flex;gap:8px;margin-top:24px;}
+
+/* ── CARDS ──────────────────────────────────────────── */
+.card{background:var(--white);border:1px solid var(--g1);border-radius:var(--radius);padding:20px;}
+.card+.card{margin-top:12px;}
+
+/* ── SCREEN 1 — HERO ───────────────────────────────── */
+.hero{text-align:center;padding:48px 0 32px;}
+.hero-badge{display:inline-flex;align-items:center;gap:6px;background:rgba(0,200,150,.07);border:1px solid rgba(0,200,150,.25);border-radius:20px;padding:5px 15px;font-size:12px;color:var(--accent);margin-bottom:22px;}
+.hero h1{font-size:34px;font-weight:600;letter-spacing:-.6px;line-height:1.18;margin-bottom:12px;}
+.hero h1 span{color:var(--blue);}
+.hero p{font-size:14px;color:var(--muted);line-height:1.65;max-width:420px;margin:0 auto 32px;}
+.feats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:32px;}
+.feat{background:var(--white);border:1px solid var(--g1);border-radius:var(--radius);padding:18px 16px;text-align:left;}
+.feat-icon{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;margin-bottom:12px;}
+.feat-icon.b{background:rgba(30,77,183,.08);}
+.feat-icon.g{background:rgba(0,200,150,.08);}
+.feat-icon.a{background:rgba(245,158,11,.08);}
+.feat-icon svg{width:18px;height:18px;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;}
+.feat-t{font-size:12px;font-weight:600;color:var(--text);margin-bottom:4px;}
+.feat-d{font-size:11px;color:var(--muted);line-height:1.5;}
+
+/* ── SCREEN 2 — UPLOAD ─────────────────────────────── */
+.drop-zone{border:2px dashed var(--g2);border-radius:14px;padding:44px 24px;text-align:center;background:var(--white);cursor:pointer;transition:.2s;position:relative;}
+.drop-zone:hover,.drop-zone.drag{border-color:var(--blue);background:rgba(30,77,183,.02);}
+.drop-zone.has-file{border-color:var(--accent);background:rgba(0,200,150,.02);}
+.drop-zone input{position:absolute;inset:0;opacity:0;cursor:pointer;}
+.drop-icon{width:56px;height:56px;background:var(--g1);border-radius:14px;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;}
+.drop-icon svg{width:28px;height:28px;fill:none;stroke:var(--blue);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;}
+.drop-title{font-size:16px;font-weight:500;margin-bottom:5px;}
+.drop-sub{font-size:13px;color:var(--muted);}
+.drop-sub b{color:var(--blue);}
+.pills{display:flex;gap:6px;justify-content:center;margin-top:14px;}
+.pill{background:var(--g1);border-radius:20px;padding:3px 11px;font-size:11px;color:var(--muted);font-weight:500;}
+.tmpl-row{display:flex;align-items:center;justify-content:space-between;background:rgba(30,77,183,.04);border:1px solid rgba(30,77,183,.14);border-radius:10px;padding:13px 18px;margin-top:16px;}
+.tmpl-row span{font-size:13px;}
+.info-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px;}
+.info-box{background:var(--white);border:1px solid var(--g1);border-radius:10px;padding:14px;}
+.info-box strong{display:block;font-size:11px;color:var(--muted);margin-bottom:4px;}
+.info-box span{font-size:12px;}
+
+/* ── SCREEN 3 — VALIDATION ──────────────────────────── */
+.stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px;}
+.stat{background:var(--white);border:1px solid var(--g1);border-radius:var(--radius);padding:18px;}
+.stat-lbl{font-size:11px;color:var(--muted);font-weight:500;margin-bottom:7px;}
+.stat-val{font-size:28px;font-weight:600;letter-spacing:-.5px;line-height:1;}
+.c-green{color:var(--success);}
+.c-red{color:var(--danger);}
+.c-amber{color:var(--warn);}
+.lot-banner{display:flex;align-items:center;justify-content:space-between;background:rgba(30,77,183,.05);border:1px solid rgba(30,77,183,.18);border-radius:10px;padding:13px 18px;margin-bottom:20px;}
+.lot-badge{background:var(--navy);color:#fff;border-radius:7px;padding:3px 11px;font-size:11px;font-weight:500;}
+.vtable{background:var(--white);border:1px solid var(--g1);border-radius:var(--radius);overflow:hidden;margin-bottom:8px;}
+.vt-hdr{display:grid;grid-template-columns:1fr 1.4fr 90px;padding:10px 16px;background:var(--g1);font-size:11px;font-weight:600;color:var(--muted);}
+.vt-row{display:grid;grid-template-columns:1fr 1.4fr 90px;padding:10px 16px;border-top:1px solid var(--g1);font-size:12px;align-items:center;}
+.vt-row:hover{background:var(--bg);}
+.badge-st{display:inline-block;padding:2px 9px;border-radius:20px;font-size:10px;font-weight:600;}
+.badge-st.valid{background:rgba(0,200,150,.1);color:var(--accent2);}
+.badge-st.invalid{background:rgba(239,68,68,.1);color:var(--danger);}
+.badge-st.dup{background:rgba(245,158,11,.1);color:#b45309;}
+
+/* ── SCREEN 4 — PROCESSING ──────────────────────────── */
+.cur-cnpj{background:var(--g1);border-radius:8px;padding:11px 15px;font-size:12px;color:var(--muted);display:flex;align-items:center;gap:10px;margin-bottom:18px;}
+.cur-cnpj b{color:var(--text);font-family:var(--mono);}
+.cur-cnpj .right{margin-left:auto;font-size:11px;}
+.spinner{width:15px;height:15px;border:2px solid var(--g2);border-top-color:var(--blue);border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.prog-card{background:var(--white);border:1px solid var(--g1);border-radius:var(--radius);padding:20px;margin-bottom:14px;}
+.prog-lbl{display:flex;justify-content:space-between;font-size:12px;margin-bottom:8px;}
+.prog-lbl span:first-child{color:var(--muted);font-weight:500;}
+.prog-lbl span:last-child{font-weight:600;}
+.bar-bg{background:var(--g1);border-radius:6px;height:8px;overflow:hidden;}
+.bar-fill{height:8px;border-radius:6px;transition:width .4s;}
+.bar-blue{background:var(--blue);}
+.bar-green{background:var(--accent);}
+.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;}
+.metric{background:var(--white);border:1px solid var(--g1);border-radius:10px;padding:13px;}
+.metric-val{font-size:24px;font-weight:600;letter-spacing:-.4px;}
+.metric-lbl{font-size:10px;color:var(--muted);margin-top:3px;font-weight:500;}
+.sources{background:var(--white);border:1px solid var(--g1);border-radius:var(--radius);padding:16px;margin-bottom:14px;}
+.src-title{font-size:12px;font-weight:600;margin-bottom:12px;}
+.src-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-top:1px solid var(--g1);font-size:12px;}
+.src-row:first-of-type{border-top:none;}
+.dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.dot.on{background:var(--accent);}
+.dot.warn{background:var(--warn);}
+.dot.off{background:var(--g2);}
+.pulse{animation:pulse 1.6s infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+.src-right{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--muted);}
+
+/* ── SCREEN 5 — RESULTS ─────────────────────────────── */
+.res-hdr{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:22px;}
+.res-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:20px;}
+.res-card{background:var(--white);border:1px solid var(--g1);border-radius:var(--radius);padding:17px;}
+.res-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:9px;}
+.res-lbl{font-size:11px;color:var(--muted);font-weight:500;}
+.res-pct{font-size:22px;font-weight:600;}
+.res-bar{height:4px;background:var(--g1);border-radius:3px;overflow:hidden;}
+.res-fill{height:4px;border-radius:3px;}
+.exp-box{background:var(--navy);border-radius:14px;padding:20px 22px;display:flex;align-items:center;justify-content:space-between;gap:16px;}
+.exp-title{font-size:15px;font-weight:600;color:#fff;margin-bottom:3px;}
+.exp-sub{font-size:11px;color:rgba(255,255,255,.4);}
+
+/* ── SCREEN 6 — REVIEW ──────────────────────────────── */
+.filters{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;}
+.filter-sel{background:var(--white);border:1px solid var(--g2);border-radius:8px;padding:7px 11px;font-size:12px;color:var(--text);font-family:var(--font);cursor:pointer;}
+.rv-table{background:var(--white);border:1px solid var(--g1);border-radius:var(--radius);overflow:hidden;font-size:12px;}
+.rv-hdr{display:grid;grid-template-columns:130px 1fr 60px 60px 65px 80px;padding:10px 15px;background:var(--g1);font-size:10px;font-weight:600;color:var(--muted);gap:8px;}
+.rv-row{display:grid;grid-template-columns:130px 1fr 60px 60px 65px 80px;padding:10px 15px;border-top:1px solid var(--g1);align-items:center;gap:8px;transition:.15s;}
+.rv-row:hover{background:var(--bg);}
+.mono{font-family:var(--mono);font-size:11px;color:var(--muted);}
+.chk{width:18px;height:18px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;}
+.chk.y{background:rgba(0,200,150,.1);}
+.chk.n{background:rgba(239,68,68,.08);}
+.score-tag{display:inline-block;padding:2px 9px;border-radius:20px;font-size:10px;font-weight:600;}
+.score-tag.alta{background:rgba(0,200,150,.1);color:var(--accent2);}
+.score-tag.media{background:rgba(245,158,11,.1);color:#b45309;}
+.score-tag.baixa{background:rgba(239,68,68,.1);color:var(--danger);}
+
+/* ── SCREEN 7 — EXPORT ──────────────────────────────── */
+.exp-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.exp-card{background:var(--white);border:1px solid var(--g1);border-radius:var(--radius);padding:18px;cursor:pointer;transition:.2s;}
+.exp-card:hover{border-color:var(--blue);transform:translateY(-2px);box-shadow:var(--shadow);}
+.exp-card-icon{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;margin-bottom:11px;}
+.exp-card-icon svg{width:20px;height:20px;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;}
+.exp-card-t{font-size:13px;font-weight:600;margin-bottom:4px;}
+.exp-card-d{font-size:11px;color:var(--muted);line-height:1.5;}
+.preview-box{background:var(--white);border:1px solid var(--g1);border-radius:var(--radius);padding:18px;margin-top:16px;}
+.tabs-row{display:flex;gap:4px;margin-bottom:14px;flex-wrap:wrap;}
+.tab{padding:5px 13px;border-radius:7px;font-size:11px;font-weight:500;cursor:pointer;color:var(--muted);border:1px solid transparent;transition:.15s;}
+.tab.active{background:var(--navy);color:#fff;}
+.tab:hover:not(.active){background:var(--g1);}
+.col-list{display:flex;flex-wrap:wrap;gap:5px;}
+.col-tag{background:var(--g1);padding:3px 10px;border-radius:5px;font-size:10px;color:var(--muted);font-weight:500;}
+
+/* ── TOAST ──────────────────────────────────────────── */
+#toast{position:fixed;bottom:28px;right:28px;background:var(--navy);color:#fff;padding:13px 20px;border-radius:11px;font-size:13px;font-weight:500;display:flex;align-items:center;gap:10px;z-index:999;transform:translateY(80px);opacity:0;transition:.3s;}
+#toast.show{transform:translateY(0);opacity:1;}
+#toast svg{width:16px;height:16px;fill:none;stroke:var(--accent);stroke-width:2.2;flex-shrink:0;}
+
+/* ── SCORE RING ─────────────────────────────────────── */
+.ring-wrap{position:relative;width:74px;height:74px;}
+.ring-wrap svg{transform:rotate(-90deg);}
+.ring-center{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon"><svg viewBox="0 0 18 18"><path d="M3 14l4-4 3 3 5-7"/></svg></div>
+    <span class="logo-name">Enriquece<span class="logo-tag">®</span></span>
+    <span class="badge">BETA</span>
+  </div>
+  <nav class="nav-steps" id="navDots">
+    <div class="step-dot active" onclick="goTo(1)" title="Início"></div>
+    <div class="step-dot" onclick="goTo(2)" title="Upload"></div>
+    <div class="step-dot" onclick="goTo(3)" title="Validação"></div>
+    <div class="step-dot" onclick="goTo(4)" title="Processando"></div>
+    <div class="step-dot" onclick="goTo(5)" title="Resultado"></div>
+    <div class="step-dot" onclick="goTo(6)" title="Revisão"></div>
+    <div class="step-dot" onclick="goTo(7)" title="Exportar"></div>
+  </nav>
+  <div class="hdr-right">CredSeller</div>
+</header>
+
+<main>
+
+<!-- ═══ TELA 1 — HERO ════════════════════════════════ -->
+<section class="screen active" id="s1">
+  <div class="hero">
+    <div class="hero-badge">
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6" cy="6" r="5"/><path d="M6 4v2.5L7.5 8" stroke-linecap="round"/></svg>
+      Enriquecimento B2B · Lotes de até 500 CNPJs
+    </div>
+    <h1>Transforme <span>CNPJs</span> em contatos<br>prontos para prospecção</h1>
+    <p>Suba uma planilha Excel ou CSV com CNPJs e receba de volta telefone, e-mail, LinkedIn, decisores e score de confiança — tudo num Excel organizado em segundos.</p>
+    <button class="btn btn-primary" onclick="goTo(2)">
+      <svg viewBox="0 0 16 16"><path d="M8 3v8M4 8l4 4 4-4"/></svg>
+      Começar enriquecimento
+    </button>
+  </div>
+  <div class="feats">
+    <div class="feat">
+      <div class="feat-icon b"><svg viewBox="0 0 18 18" stroke="#1e4db7"><rect x="2" y="3" width="14" height="12" rx="2.5"/><path d="M5 8h8M5 11.5h5"/></svg></div>
+      <div class="feat-t">Dados cadastrais</div>
+      <div class="feat-d">CNPJ, CNAE, porte, endereço e situação via BrasilAPI e ReceitaWS.</div>
+    </div>
+    <div class="feat">
+      <div class="feat-icon g"><svg viewBox="0 0 18 18" stroke="#00a87b"><circle cx="9" cy="7" r="3.5"/><path d="M2 16c0-3.5 3.1-6 7-6s7 2.5 7 6"/></svg></div>
+      <div class="feat-t">Decisores B2B</div>
+      <div class="feat-d">Nome, cargo, LinkedIn e e-mail dos decisores certos via Hunter.io e Apollo.</div>
+    </div>
+    <div class="feat">
+      <div class="feat-icon a"><svg viewBox="0 0 18 18" stroke="#b45309"><path d="M9 2l2 4.5 5 .7-3.6 3.5.85 5L9 13.3l-4.25 2.4.85-5L2 7.2l5-.7z" stroke-linejoin="round"/></svg></div>
+      <div class="feat-t">Score de confiança</div>
+      <div class="feat-d">Alta, Média ou Baixa — cada dado com fonte e rastreabilidade completa.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ TELA 2 — UPLOAD ══════════════════════════════ -->
+<section class="screen" id="s2">
+  <div class="pg-title">Upload da base</div>
+  <div class="pg-sub">Aceita .xlsx ou .csv. A coluna CNPJ é detectada automaticamente.</div>
+  <div class="drop-zone" id="dropZone">
+    <input type="file" id="fileInput" accept=".xlsx,.csv,.xls" onchange="handleFile(this)">
+    <div class="drop-icon"><svg viewBox="0 0 28 28"><path d="M14 4v16M7 11l7-7 7 7"/><path d="M4 22h20" stroke-linecap="round"/></svg></div>
+    <div class="drop-title" id="dropTitle">Arraste sua planilha aqui</div>
+    <div class="drop-sub" id="dropSub">ou <b>clique para selecionar</b></div>
+    <div class="pills"><span class="pill">.xlsx</span><span class="pill">.csv</span><span class="pill">.xls</span></div>
+  </div>
+  <div class="tmpl-row">
+    <span>Precisa do modelo de planilha?</span>
+    <button class="btn-link" onclick="downloadTemplate()">
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 2v6M3 6l3 3 3-3M2 10h8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Baixar modelo Excel
+    </button>
+  </div>
+  <div class="info-grid">
+    <div class="info-box"><strong>Campo obrigatório</strong><span>CNPJ (apenas este)</span></div>
+    <div class="info-box"><strong>Campos opcionais</strong><span>Nome, Cidade, Estado, Razão Social</span></div>
+    <div class="info-box"><strong>Limite por lote</strong><span>Até 500 CNPJs por vez</span></div>
+  </div>
+  <div class="actions">
+    <button class="btn btn-secondary" onclick="goTo(1)">Voltar</button>
+    <button class="btn btn-primary" id="btnValidar" disabled onclick="uploadFile()">
+      <svg viewBox="0 0 16 16"><path d="M4 8h8M10 5l3 3-3 3"/></svg>
+      Validar base
+    </button>
+  </div>
+</section>
+
+<!-- ═══ TELA 3 — VALIDATION ══════════════════════════ -->
+<section class="screen" id="s3">
+  <div class="pg-title">Validação da base</div>
+  <div class="pg-sub" id="s3sub">arquivo.xlsx · detectado automaticamente</div>
+  <div class="stats-grid">
+    <div class="stat"><div class="stat-lbl">Total importado</div><div class="stat-val" id="v-total">—</div></div>
+    <div class="stat"><div class="stat-lbl">CNPJs válidos</div><div class="stat-val c-green" id="v-valid">—</div></div>
+    <div class="stat"><div class="stat-lbl">Duplicados</div><div class="stat-val c-amber" id="v-dup">—</div></div>
+    <div class="stat"><div class="stat-lbl">Inválidos</div><div class="stat-val c-red" id="v-inv">—</div></div>
+    <div class="stat"><div class="stat-lbl">Lotes de 500</div><div class="stat-val" id="v-lots">—</div></div>
+    <div class="stat"><div class="stat-lbl">Coluna detectada</div><div class="stat-val" id="v-col" style="font-size:14px;font-family:var(--mono)">—</div></div>
+  </div>
+  <div class="lot-banner">
+    <div style="font-size:13px;color:var(--navy2)">Processando: <strong id="lot-lbl">Lote 1 de 1</strong> · <span id="lot-count">0</span> CNPJs prontos</div>
+    <div class="lot-badge" id="lot-badge">Lote 1</div>
+  </div>
+  <div class="vtable">
+    <div class="vt-hdr"><span>CNPJ</span><span>Nome / Razão Social</span><span>Status</span></div>
+    <div id="vt-body"></div>
+  </div>
+  <div class="actions">
+    <button class="btn btn-secondary" onclick="goTo(2)">Voltar</button>
+    <button class="btn btn-primary" onclick="startEnrich()">
+      <svg viewBox="0 0 16 16"><path d="M3 8l4 4 7-7" stroke-width="2.2"/></svg>
+      Iniciar enriquecimento
+    </button>
+  </div>
+</section>
+
+<!-- ═══ TELA 4 — PROCESSING ══════════════════════════ -->
+<section class="screen" id="s4">
+  <div class="pg-title">Enriquecendo sua base</div>
+  <div class="pg-sub" id="s4sub">Processando Lote 1…</div>
+  <div class="cur-cnpj">
+    <div class="spinner"></div>
+    Processando: <b id="cur-cnpj">—</b>
+    <div class="right" id="proc-count">0 / 0</div>
+  </div>
+  <div class="prog-card">
+    <div class="prog-lbl"><span>Progresso geral</span><span id="pct-g">0%</span></div>
+    <div class="bar-bg" style="margin-bottom:14px"><div class="bar-fill bar-blue" id="bar-g" style="width:0"></div></div>
+    <div class="prog-lbl"><span>Lote atual</span><span id="pct-l">0%</span></div>
+    <div class="bar-bg"><div class="bar-fill bar-green" id="bar-l" style="width:0"></div></div>
+  </div>
+  <div class="metrics">
+    <div class="metric"><div class="metric-val" id="m-proc">0</div><div class="metric-lbl">Processadas</div></div>
+    <div class="metric"><div class="metric-val" id="m-cont">0</div><div class="metric-lbl">Contatos</div></div>
+    <div class="metric"><div class="metric-val" id="m-dec">0</div><div class="metric-lbl">Decisores</div></div>
+    <div class="metric"><div class="metric-val" id="m-tel">0</div><div class="metric-lbl">Telefones</div></div>
+    <div class="metric"><div class="metric-val" id="m-email">0</div><div class="metric-lbl">E-mails</div></div>
+    <div class="metric"><div class="metric-val" id="m-conf">—</div><div class="metric-lbl">Score médio</div></div>
+  </div>
+  <div class="sources">
+    <div class="src-title">Status das fontes</div>
+    <div class="src-row">
+      <span>BrasilAPI / ReceitaWS</span>
+      <div class="src-right"><div class="dot on pulse"></div>Ativo</div>
+    </div>
+    <div class="src-row">
+      <span>Google Search API</span>
+      <div class="src-right"><div class="dot on pulse" id="src-google"></div><span id="src-google-lbl">Ativo</span></div>
+    </div>
+    <div class="src-row">
+      <span>Hunter.io</span>
+      <div class="src-right"><div class="dot" id="src-hunter"></div><span id="src-hunter-lbl">Verificando chave…</span></div>
+    </div>
+    <div class="src-row">
+      <span>Apollo</span>
+      <div class="src-right"><div class="dot" id="src-apollo"></div><span id="src-apollo-lbl">Verificando chave…</span></div>
+    </div>
+  </div>
+  <div class="actions">
+    <button class="btn btn-secondary" id="btnPause" onclick="togglePause()">Pausar</button>
+    <button class="btn btn-danger" onclick="goTo(5)">Ver resultados parciais</button>
+  </div>
+</section>
+
+<!-- ═══ TELA 5 — RESULTS ═════════════════════════════ -->
+<section class="screen" id="s5">
+  <div class="res-hdr">
+    <div>
+      <div class="pg-title">Enriquecimento concluído</div>
+      <div class="pg-sub" id="s5sub">—</div>
+    </div>
+    <div style="text-align:center">
+      <div style="font-size:10px;color:var(--muted);margin-bottom:5px;font-weight:500">Score médio</div>
+      <div class="ring-wrap">
+        <svg viewBox="0 0 74 74" width="74" height="74">
+          <circle cx="37" cy="37" r="30" fill="none" stroke="var(--g1)" stroke-width="6"/>
+          <circle cx="37" cy="37" r="30" fill="none" stroke="var(--accent)" stroke-width="6"
+            stroke-dasharray="188.4" id="ring-fill" stroke-dashoffset="47" stroke-linecap="round"/>
+        </svg>
+        <div class="ring-center" id="ring-val">75%</div>
+      </div>
+    </div>
+  </div>
+  <div class="res-grid">
+    <div class="res-card"><div class="res-top"><span class="res-lbl">Telefone encontrado</span><span class="res-pct" id="r-tel">—</span></div><div class="res-bar"><div class="res-fill bar-blue" id="rb-tel" style="width:0"></div></div></div>
+    <div class="res-card"><div class="res-top"><span class="res-lbl">E-mail encontrado</span><span class="res-pct" id="r-email">—</span></div><div class="res-bar"><div class="res-fill bar-green" id="rb-email" style="width:0"></div></div></div>
+    <div class="res-card"><div class="res-top"><span class="res-lbl">Site encontrado</span><span class="res-pct" id="r-site">—</span></div><div class="res-bar"><div class="res-fill bar-blue" id="rb-site" style="width:0"></div></div></div>
+    <div class="res-card"><div class="res-top"><span class="res-lbl">Decisor encontrado</span><span class="res-pct" id="r-dec">—</span></div><div class="res-bar"><div class="res-fill" style="background:var(--warn)" id="rb-dec" style="width:0"></div></div></div>
+    <div class="res-card"><div class="res-top"><span class="res-lbl">Alta confiança</span><span class="res-pct" id="r-alta">—</span></div><div class="res-bar"><div class="res-fill bar-green" id="rb-alta" style="width:0"></div></div></div>
+    <div class="res-card"><div class="res-top"><span class="res-lbl">Com pendências</span><span class="res-pct" id="r-pend">—</span></div><div class="res-bar"><div class="res-fill" style="background:var(--warn)" id="rb-pend" style="width:0"></div></div></div>
+  </div>
+  <div class="exp-box">
+    <div>
+      <div class="exp-title">Base pronta para prospecção</div>
+      <div class="exp-sub" id="exp-sub2">0 empresas · 6 abas · Excel formatado</div>
+    </div>
+    <button class="btn btn-success" onclick="exportExcel('all')">
+      <svg viewBox="0 0 16 16"><path d="M8 3v8M4 8l4 4 4-4M2 14h12"/></svg>
+      Exportar Excel
+    </button>
+  </div>
+  <div class="actions">
+    <button class="btn btn-secondary" onclick="goTo(6)">Revisar base</button>
+    <button class="btn btn-secondary" onclick="goTo(2)">Novo lote</button>
+  </div>
+</section>
+
+<!-- ═══ TELA 6 — REVIEW ══════════════════════════════ -->
+<section class="screen" id="s6">
+  <div class="pg-title">Revisão da base</div>
+  <div class="pg-sub">Filtre e confira antes de exportar.</div>
+  <div class="filters">
+    <select class="filter-sel" onchange="filterTable()">
+      <option value="">Todos os scores</option>
+      <option value="alta">Alta confiança</option>
+      <option value="media">Média confiança</option>
+      <option value="baixa">Baixa confiança</option>
+    </select>
+    <select class="filter-sel" onchange="filterTable()">
+      <option value="">Todos os status</option>
+      <option value="completo">Completo</option>
+      <option value="parcial">Parcial</option>
+      <option value="sem dados">Sem dados</option>
+    </select>
+  </div>
+  <div class="rv-table">
+    <div class="rv-hdr"><span>CNPJ</span><span>Empresa</span><span>Tel.</span><span>E-mail</span><span>Decisor</span><span>Score</span></div>
+    <div id="rv-body"></div>
+  </div>
+  <div class="actions">
+    <button class="btn btn-secondary" onclick="goTo(5)">Voltar</button>
+    <button class="btn btn-primary" onclick="goTo(7)">
+      <svg viewBox="0 0 16 16"><path d="M4 8h8M10 5l3 3-3 3"/></svg>
+      Exportar
+    </button>
+  </div>
+</section>
+
+<!-- ═══ TELA 7 — EXPORT ══════════════════════════════ -->
+<section class="screen" id="s7">
+  <div class="pg-title">Exportar base enriquecida</div>
+  <div class="pg-sub">Escolha o filtro desejado.</div>
+  <div class="exp-grid">
+    <div class="exp-card" onclick="exportExcel('all')">
+      <div class="exp-card-icon" style="background:rgba(0,200,150,.08)"><svg stroke="#00a87b" viewBox="0 0 20 20"><rect x="2" y="2" width="16" height="16" rx="3"/><path d="M6 10h8M6 6.5h8M6 13.5h5"/></svg></div>
+      <div class="exp-card-t">Excel completo</div>
+      <div class="exp-card-d">Todas as 6 abas — resumo, base, decisores, fontes, pendências e inválidos.</div>
+    </div>
+    <div class="exp-card" onclick="exportExcel('alta')">
+      <div class="exp-card-icon" style="background:rgba(30,77,183,.08)"><svg stroke="#1e4db7" viewBox="0 0 20 20"><path d="M10 2l2.5 5 5.5.8-4 3.9 1 5.4L10 14.7l-5 2.4 1-5.4-4-3.9 5.5-.8z" stroke-linejoin="round"/></svg></div>
+      <div class="exp-card-t">Apenas alta confiança</div>
+      <div class="exp-card-d">Empresas com dados confirmados — pronto para abordagem imediata.</div>
+    </div>
+    <div class="exp-card" onclick="exportExcel('decisores')">
+      <div class="exp-card-icon" style="background:rgba(245,158,11,.08)"><svg stroke="#b45309" viewBox="0 0 20 20"><circle cx="10" cy="8" r="4"/><path d="M3 18c0-3.9 3.1-7 7-7s7 3.1 7 7"/></svg></div>
+      <div class="exp-card-t">Com decisores</div>
+      <div class="exp-card-d">Empresas com LinkedIn ou e-mail de decisor identificado.</div>
+    </div>
+    <div class="exp-card" onclick="exportExcel('pendencias')">
+      <div class="exp-card-icon" style="background:rgba(239,68,68,.08)"><svg stroke="#ef4444" viewBox="0 0 20 20"><circle cx="10" cy="10" r="8"/><path d="M10 7v4M10 13.5v.5" stroke-linecap="round"/></svg></div>
+      <div class="exp-card-t">Pendências</div>
+      <div class="exp-card-d">Empresas incompletas com campo e motivo para pesquisa manual.</div>
+    </div>
+  </div>
+
+  <div class="preview-box">
+    <div style="font-size:13px;font-weight:600;margin-bottom:12px">Abas do Excel gerado</div>
+    <div class="tabs-row">
+      <div class="tab active" onclick="showTab(this,'resumo')">Resumo</div>
+      <div class="tab" onclick="showTab(this,'base')">Base Enriquecida</div>
+      <div class="tab" onclick="showTab(this,'dec')">Decisores</div>
+      <div class="tab" onclick="showTab(this,'fontes')">Fontes</div>
+      <div class="tab" onclick="showTab(this,'pend')">Pendências</div>
+      <div class="tab" onclick="showTab(this,'inv')">Inválidos</div>
+    </div>
+    <div id="tab-resumo" class="col-list"><span class="col-tag">Total processados</span><span class="col-tag">Enriquecidas</span><span class="col-tag">Sem dados</span><span class="col-tag">Telefones</span><span class="col-tag">E-mails</span><span class="col-tag">Decisores</span><span class="col-tag">Score médio</span><span class="col-tag">Data</span><span class="col-tag">Gerado por</span></div>
+    <div id="tab-base" class="col-list" style="display:none"><span class="col-tag">CNPJ</span><span class="col-tag">Razão Social</span><span class="col-tag">Nome Fantasia</span><span class="col-tag">CNAE</span><span class="col-tag">Porte</span><span class="col-tag">Cidade</span><span class="col-tag">Estado</span><span class="col-tag">Site</span><span class="col-tag">LinkedIn</span><span class="col-tag">Telefone</span><span class="col-tag">WhatsApp</span><span class="col-tag">E-mail Geral</span><span class="col-tag">E-mail Comercial</span><span class="col-tag">Score</span><span class="col-tag">Status</span></div>
+    <div id="tab-dec" class="col-list" style="display:none"><span class="col-tag">CNPJ</span><span class="col-tag">Empresa</span><span class="col-tag">Nome Decisor</span><span class="col-tag">Cargo</span><span class="col-tag">Área</span><span class="col-tag">LinkedIn</span><span class="col-tag">E-mail</span><span class="col-tag">Prioridade</span><span class="col-tag">Motivo</span><span class="col-tag">Score</span><span class="col-tag">Fonte</span></div>
+    <div id="tab-fontes" class="col-list" style="display:none"><span class="col-tag">CNPJ</span><span class="col-tag">Empresa</span><span class="col-tag">Dado</span><span class="col-tag">Fonte</span><span class="col-tag">URL</span><span class="col-tag">Tipo</span><span class="col-tag">Confiança</span><span class="col-tag">Data</span></div>
+    <div id="tab-pend" class="col-list" style="display:none"><span class="col-tag">CNPJ</span><span class="col-tag">Empresa</span><span class="col-tag">Campo Pendente</span><span class="col-tag">Motivo</span><span class="col-tag">Próxima Ação</span><span class="col-tag">Prioridade</span></div>
+    <div id="tab-inv" class="col-list" style="display:none"><span class="col-tag">CNPJ Original</span><span class="col-tag">Motivo</span><span class="col-tag">Linha Original</span><span class="col-tag">Status</span></div>
+  </div>
+
+  <div class="actions">
+    <button class="btn btn-secondary" onclick="goTo(5)">Voltar</button>
+    <button class="btn btn-success" onclick="exportExcel('all')">
+      <svg viewBox="0 0 16 16"><path d="M8 3v8M4 8l4 4 4-4M2 14h12"/></svg>
+      Baixar Excel completo
+    </button>
+  </div>
+</section>
+
+</main>
+
+<!-- TOAST -->
+<div id="toast">
+  <svg viewBox="0 0 16 16"><path d="M3 8l4 4 6-7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  <span id="toast-msg">Pronto!</span>
+</div>
+
+<script>
+const API = "";  // empty = same origin
+let sessionId = null;
+let evtSource = null;
+let paused = false;
+let currentFile = null;
+
+// ── Navigation ──────────────────────────────────────
+function goTo(n) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('s' + n).classList.add('active');
+  document.querySelectorAll('.step-dot').forEach((d, i) => {
+    d.classList.remove('active','done');
+    if (i+1 < n) d.classList.add('done');
+    else if (i+1 === n) d.classList.add('active');
+  });
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
+// ── File handling ────────────────────────────────────
+function handleFile(input) {
+  if (!input.files || !input.files[0]) return;
+  currentFile = input.files[0];
+  document.getElementById('dropTitle').textContent = currentFile.name;
+  document.getElementById('dropSub').innerHTML = 'Arquivo selecionado &mdash; clique para trocar';
+  document.getElementById('dropZone').classList.add('has-file');
+  document.getElementById('btnValidar').disabled = false;
+}
+
+// Drag-drop
+const dz = document.getElementById('dropZone');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('drag'));
+dz.addEventListener('drop', e => {
+  e.preventDefault(); dz.classList.remove('drag');
+  const f = e.dataTransfer.files[0];
+  if (f) { document.getElementById('fileInput').files; currentFile = f;
+    document.getElementById('dropTitle').textContent = f.name;
+    document.getElementById('dropSub').innerHTML = 'Arquivo selecionado &mdash; clique para trocar';
+    dz.classList.add('has-file');
+    document.getElementById('btnValidar').disabled = false; }
+});
+
+// ── Upload ──────────────────────────────────────────
+async function uploadFile() {
+  if (!currentFile) return;
+  const fd = new FormData();
+  fd.append('file', currentFile);
+  try {
+    const r = await fetch(API + '/api/cnpj/upload', {method:'POST', body:fd});
+    if (!r.ok) throw new Error(await r.text());
+    const d = await r.json();
+    sessionId = d.session_id;
+    showValidation(d);
+    goTo(3);
+  } catch(e) {
+    showToast('Erro: ' + e.message, true);
+  }
+}
+
+function showValidation(d) {
+  document.getElementById('s3sub').textContent = currentFile.name + ' · coluna detectada: CNPJ';
+  document.getElementById('v-total').textContent = d.total;
+  document.getElementById('v-valid').textContent = d.valid;
+  document.getElementById('v-dup').textContent   = d.duplicates;
+  document.getElementById('v-inv').textContent   = d.invalid;
+  document.getElementById('v-lots').textContent  = d.lots;
+  document.getElementById('v-col').textContent   = 'CNPJ';
+  document.getElementById('lot-lbl').textContent = 'Lote 1 de ' + d.lots;
+  document.getElementById('lot-count').textContent = Math.min(d.valid, 500);
+  const body = document.getElementById('vt-body');
+  body.innerHTML = '';
+  (d.preview || []).forEach(r => {
+    const row = document.createElement('div');
+    row.className = 'vt-row';
+    row.innerHTML = `<span class="mono">${r.cnpj}</span><span>—</span><span><span class="badge-st valid">Válido</span></span>`;
+    body.appendChild(row);
+  });
+}
+
+// ── Enrichment ──────────────────────────────────────
+async function startEnrich() {
+  if (!sessionId) { showToast('Nenhuma sessão ativa.', true); return; }
+  await fetch(API + `/api/enrich/start/${sessionId}?lot_index=0`, {method:'POST'});
+  goTo(4);
+  paused = false;
+  document.getElementById('s4sub').textContent = 'Processando Lote 1…';
+  evtSource = new EventSource(API + `/api/enrich/stream/${sessionId}?lot_index=0`);
+  evtSource.onmessage = e => {
+    const d = JSON.parse(e.data);
+    if (d.error) { evtSource.close(); showToast(d.error, true); return; }
+    if (d.status === 'processing') {
+      const pct = d.pct || 0;
+      document.getElementById('bar-g').style.width = pct + '%';
+      document.getElementById('pct-g').textContent  = pct + '%';
+      document.getElementById('bar-l').style.width = pct + '%';
+      document.getElementById('pct-l').textContent  = pct + '%';
+      document.getElementById('cur-cnpj').textContent = d.current_cnpj || '—';
+      document.getElementById('proc-count').textContent = d.processed + ' / ' + d.total;
+      document.getElementById('m-proc').textContent  = d.processed;
+      document.getElementById('m-cont').textContent  = d.contacts_found || 0;
+      document.getElementById('m-dec').textContent   = d.decisors_found || 0;
+      document.getElementById('m-tel').textContent   = d.phones_found   || 0;
+      document.getElementById('m-email').textContent = d.emails_found   || 0;
+      document.getElementById('m-conf').textContent  = '—';
+      // source dots
+      document.getElementById('src-hunter').className = 'dot ' + (window._hunterOk ? 'on pulse' : 'warn');
+      document.getElementById('src-apollo').className = 'dot ' + (window._apolloOk ? 'on pulse' : 'warn');
     }
-    return sid
+    if (d.status === 'done') {
+      evtSource.close();
+      showResults(d);
+      buildReviewTable();
+      goTo(5);
+    }
+  };
+  evtSource.onerror = () => { evtSource.close(); };
+}
 
-def get_session(sid: str) -> Dict[str, Any]:
-    if sid not in sessions:
-        raise KeyError(f"Session {sid} not found")
-    return sessions[sid]
+async function togglePause() {
+  if (!sessionId) return;
+  paused = !paused;
+  await fetch(API + `/api/enrich/${paused?'pause':'resume'}/${sessionId}`, {method:'POST'});
+  document.getElementById('btnPause').textContent = paused ? 'Retomar' : 'Pausar';
+}
 
-def update_session(sid: str, **kwargs):
-    sessions[sid].update(kwargs)
+function showResults(d) {
+  const n = d.total || 1;
+  const set = (id, pct, barId) => {
+    document.getElementById(id).textContent = pct + '%';
+    const el = document.getElementById(barId);
+    if (el) el.style.width = pct + '%';
+  };
+  set('r-tel', d.pct_telefone||0, 'rb-tel');
+  set('r-email', d.pct_email||0, 'rb-email');
+  set('r-site', d.pct_site||0, 'rb-site');
+  set('r-dec', d.pct_decisor||0, 'rb-dec');
+  set('r-alta', d.pct_alta||0, 'rb-alta');
+  const pend = 100 - (d.pct_alta||0);
+  set('r-pend', Math.max(0,pend), 'rb-pend');
+  document.getElementById('s5sub').textContent = n + ' empresas processadas';
+  document.getElementById('exp-sub2').textContent = n + ' empresas · 6 abas · Excel formatado';
+  const avg = Math.round((d.pct_telefone + d.pct_email + d.pct_site + d.pct_decisor) / 4) || 0;
+  const offset = 188.4 * (1 - avg/100);
+  document.getElementById('ring-fill').setAttribute('stroke-dashoffset', offset);
+  document.getElementById('ring-val').textContent = avg + '%';
+}
+
+// ── Review table ─────────────────────────────────────
+async function buildReviewTable() {
+  if (!sessionId) return;
+  const r = await fetch(API + `/api/enrich/results/${sessionId}`);
+  const d = await r.json();
+  const body = document.getElementById('rv-body');
+  body.innerHTML = '';
+  (d.results || []).forEach(row => {
+    const hasTel   = row.telefone_cad && row.telefone_cad !== 'não encontrado';
+    const hasEmail = (row.email_cad && row.email_cad !== 'não encontrado') ||
+                     (row.email_comercial && row.email_comercial !== 'não encontrado');
+    const hasDec   = row.decisores && row.decisores.length > 0;
+    const sc = row.score_geral || 'baixa';
+    const sl = {alta:'Alta',media:'Média',baixa:'Baixa'}[sc] || sc;
+    const chk = ok => ok
+      ? `<span class="chk y"><svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--accent2)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 5l2 2 4-4"/></svg></span>`
+      : `<span class="chk n"><svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--danger)" stroke-width="2" stroke-linecap="round"><path d="M2.5 2.5l5 5M7.5 2.5l-5 5"/></svg></span>`;
+    const el = document.createElement('div');
+    el.className = 'rv-row';
+    el.innerHTML = `<span class="mono">${row.cnpj}</span><span style="font-size:12px;font-weight:500">${row.razao_social||'—'}</span>${chk(hasTel)}${chk(hasEmail)}${chk(hasDec)}<span><span class="score-tag ${sc}">${sl}</span></span>`;
+    body.appendChild(el);
+  });
+}
+
+function filterTable() { buildReviewTable(); }
+
+// ── Export ───────────────────────────────────────────
+function exportExcel(filter) {
+  if (!sessionId) { showToast('Nenhum resultado para exportar. Processe uma base primeiro.', true); return; }
+  const url = API + `/api/export/excel/${sessionId}?filter=${filter}`;
+  const a = document.createElement('a');
+  a.href = url; a.download = `enriquece_${filter}.xlsx`;
+  a.click();
+  showToast('Download iniciado!');
+}
+
+// ── Template download ─────────────────────────────────
+function downloadTemplate() {
+  // Generate a simple CSV template
+  const csv = "CNPJ,Nome Empresa,Cidade,Estado,Razão Social\n11.222.333/0001-81,Exemplo SA,São Paulo,SP,Exemplo SA\n";
+  const blob = new Blob([csv], {type:'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'modelo_enriquece.csv';
+  a.click();
+  showToast('Modelo baixado!');
+}
+
+// ── Tab switcher ──────────────────────────────────────
+function showTab(el, id) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('[id^="tab-"]').forEach(t => t.style.display = 'none');
+  el.classList.add('active');
+  document.getElementById('tab-' + id).style.display = 'flex';
+}
+
+// ── Toast ─────────────────────────────────────────────
+function showToast(msg, err=false) {
+  const t = document.getElementById('toast');
+  document.getElementById('toast-msg').textContent = msg;
+  t.style.background = err ? 'var(--danger)' : 'var(--navy)';
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3500);
+}
+</script>
+</body>
+</html>
